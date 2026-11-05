@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SOLDADURA SANJO SIMULATOR - Wii Homebrew Edition</title>
+    <!-- Tailwind CSS (compilado, offline) -->
+    <link rel="stylesheet" href="css/tailwind.css">
+    <!-- FontAwesome (local) -->
+    <link rel="stylesheet" href="css/all.min.css">
+    <style>
+        @import url('css/fonts.css');
+
+        body {
+            font-family: 'Chakra Petch', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            overflow: hidden;
+        }
+
+        .mono-font {
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        /* Wii Style Glow & Radial Gradients */
+        .wii-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+            border: 3px solid rgba(56, 189, 248, 0.4);
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.25), inset 0 0 20px rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+        }
+
+        .wii-btn {
+            background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 6px 16px rgba(2, 132, 199, 0.5), inset 0 2px 2px rgba(255, 255, 255, 0.7);
+        }
+
+        .wii-btn:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 24px rgba(56, 189, 248, 0.7), inset 0 2px 3px rgba(255, 255, 255, 0.9);
+            background: linear-gradient(180deg, #7dd3fc 0%, #0369a1 100%);
+        }
+
+        .wii-btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 3px 8px rgba(2, 132, 199, 0.4);
+        }
+
+        /* Scanline Overlay for CRT/Wii Visual Feel */
+        .scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #0284c7;
+            border-radius: 3px;
+        }
+
+        /* Fluid Typography and Layout Helpers */
+        .title-responsive {
+            font-size: clamp(1.6rem, 4vw, 2.75rem);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between items-center relative select-none overflow-hidden bg-slate-950">
+
+    <!-- Scanline Canvas Filter Overlay -->
+    <div class="scanlines absolute inset-0 z-40"></div>
+
+    <!-- WII HUD HEADER -->
+    <header class="w-full bg-slate-900/95 border-b-2 border-sky-500/40 px-4 py-2.5 flex justify-between items-center z-30 shadow-xl shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-xl bg-sky-500/20 border-2 border-sky-400 flex items-center justify-center text-sky-400 font-bold text-2xl shadow-inner shrink-0">
+                <i class="fa-solid fa-bolt-lightning"></i>
+            </div>
+            <div>
+                <h1 class="title-responsive font-black tracking-wider text-sky-300 uppercase leading-none">SOLDADURA SANJO <span class="text-xs md:text-sm px-2 py-0.5 rounded-md bg-sky-500/30 text-sky-300 border border-sky-400 font-bold">SIMULATOR</span></h1>
+                <p class="text-xs md:text-sm text-slate-300 font-medium hidden sm:block">Homebrew Wii Edition • Modulo de Entrenamiento Técnico</p>
+            </div>
+        </div>
+
+        <!-- HUD Gauges (Visible during gameplay) -->
+        <div id="hudStats" class="hidden flex items-center gap-4 md:gap-6 mono-font">
+            <!-- Timer Display -->
+            <div id="hudTimerContainer" class="bg-slate-800/90 px-3.5 py-1.5 rounded-xl border-2 border-slate-600 text-center min-w-[100px] shadow-md">
+                <div class="text-xs font-bold text-slate-300 tracking-wider">TIEMPO</div>
+                <div id="hudTimer" class="text-sky-300 font-extrabold text-xl md:text-2xl tracking-widest">01:30</div>
+            </div>
+
+            <!-- Heat Meter -->
+            <div class="hidden sm:flex flex-col items-end">
+                <span class="text-xs font-bold text-slate-300 flex items-center gap-1">TEMP ANTORCHA <i class="fa-solid fa-fire text-amber-500 text-sm"></i></span>
+                <div class="w-32 md:w-40 h-4 bg-slate-800 rounded-full overflow-hidden border-2 border-slate-600 p-0.5 shadow-inner">
+                    <div id="heatBar" class="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-red-600 rounded-full w-0 transition-all duration-75"></div>
+                </div>
+            </div>
+
+            <!-- Score & Precision -->
+            <div class="bg-slate-800/90 px-3.5 py-1.5 rounded-xl border-2 border-slate-600 text-right shadow-md">
+                <div class="text-xs font-bold text-slate-300 tracking-wider">PRECISIÓN</div>
+                <div id="hudPrecision" class="text-sky-300 font-extrabold text-lg md:text-xl">100.0%</div>
+            </div>
+
+            <div class="bg-slate-800/90 px-3.5 py-1.5 rounded-xl border-2 border-slate-600 text-right shadow-md">
+                <div class="text-xs font-bold text-slate-300 tracking-wider">PUNTAJE</div>
+                <div id="hudScore" class="text-amber-400 font-extrabold text-xl md:text-2xl tracking-wider">00000</div>
+            </div>
+        </div>
+
+        <!-- Wiimote Status Badge -->
+        <div class="flex items-center gap-2.5 bg-slate-800 px-3.5 py-1.5 rounded-full border-2 border-slate-600 shadow-md">
+            <i class="fa-solid fa-gamepad text-sky-400 text-xl"></i>
+            <div class="hidden md:block">
+                <div class="text-slate-200 font-bold text-sm flex items-center gap-1.5">
+                    WIIMOTE P1 
+                    <span id="wiimoteIR" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" title="Sensor IR Activo"></span>
+                </div>
+                <div class="text-slate-400 text-xs font-semibold">Puntero IR + Botón B</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GAMEPLAY & MENU CANVAS AREA -->
+    <main class="relative w-full flex-1 flex items-center justify-center p-2 md:p-4 overflow-hidden min-h-0">
+        
+        <!-- Canvas Layer -->
+        <div class="relative w-full h-full max-w-6xl max-h-[720px] rounded-2xl overflow-hidden shadow-2xl border-2 md:border-4 border-slate-700 bg-slate-950 flex flex-col">
+            <canvas id="gameCanvas" class="w-full h-full block cursor-crosshair flex-1"></canvas>
+
+            <!-- Audio & Sound Controls Overlay -->
+            <button id="soundToggleBtn" class="absolute bottom-3 left-3 z-30 bg-slate-900/90 hover:bg-slate-800 text-sky-400 p-2.5 rounded-full border-2 border-sky-500/40 transition shadow-lg">
+                <i id="soundIcon" class="fa-solid fa-volume-high text-xl"></i>
+            </button>
+
+            <!-- Instructions Overlay Prompt on Canvas Start -->
+            <div id="canvasHelpTag" class="absolute bottom-3 right-3 z-30 text-xs md:text-sm font-bold text-slate-200 bg-slate-900/90 px-3.5 py-1.5 rounded-xl border-2 border-slate-700 pointer-events-none shadow-lg">
+                <i class="fa-solid fa-hand-pointer text-sky-400 mr-1.5 text-base"></i> Mueve el puntero • Mantén <span class="text-amber-400 font-extrabold">Botón B / Click / Espacio</span> para soldar
+            </div>
+
+            <!-- Red Flash Overlay for Out of Bounds Penalty -->
+            <div id="warningOverlay" class="absolute inset-0 bg-red-600/30 pointer-events-none opacity-0 transition-opacity duration-100 z-20"></div>
+
+            <!-- 10-Second Countdown Warning Banner -->
+            <div id="timerWarningBanner" class="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-extrabold px-6 py-2.5 rounded-full border-2 border-yellow-300 shadow-2xl hidden animate-pulse z-30 pointer-events-none tracking-widest text-base md:text-lg flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-yellow-300 text-2xl"></i> ¡ÚLTIMOS 10 SEGUNDOS!
+            </div>
+
+            <!-- OVERLAY: MAIN MENU -->
+            <div id="menuOverlay" class="absolute inset-0 z-30 flex flex-col items-center justify-center p-3 md:p-6 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
+                <div class="wii-card max-w-3xl w-full p-4 md:p-6 rounded-2xl text-center relative overflow-hidden my-auto max-h-full flex flex-col justify-between">
+                    
+                    <div class="shrink-0 mb-2">
+                        <div class="inline-block bg-sky-500/20 border border-sky-400/40 px-3.5 py-1 rounded-full text-sky-300 text-xs md:text-sm font-bold uppercase tracking-widest mb-1">
+                            Entrenamiento Técnico Wii Homebrew
+                        </div>
+
+                        <h2 class="title-responsive font-black text-white tracking-wide uppercase leading-tight drop-shadow-md">
+                            SOLDADURA <span class="text-sky-400">SANJO</span> SIMULATOR
+                        </h2>
+                        <p class="text-slate-200 text-sm md:text-base max-w-lg mx-auto font-semibold">
+                            Selecciona un patrón técnico de costura. Dispones de <strong class="text-amber-400 font-extrabold">01:30 minutos</strong> para realizar el ejercicio.
+                        </p>
+                    </div>
+
+                    <!-- Select 6 Levels Grid -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3.5 mb-4 text-left overflow-y-auto max-h-[45vh] p-1">
+                        <button onclick="selectLevel('medialuna')" id="lvlBtn-medialuna" class="mode-card bg-slate-800/90 hover:bg-sky-900/50 border-2 border-sky-400 bg-sky-900/50 p-3 rounded-xl transition flex flex-col gap-1 group shadow-md">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sky-300 font-black text-base md:text-lg group-hover:text-white transition">1. Media luna</span>
+                                <i class="fa-solid fa-moon text-sky-400 text-base"></i>
+                            </div>
+                            <span class="text-xs md:text-sm text-slate-300 font-semibold">Arcos cóncavos continuos.</span>
+                        </button>
+
+                        <button onclick="selectLevel('zigzag_curvo')" id="lvlBtn-zigzag_curvo" class="mode-card bg-slate-800/90 hover:bg-sky-900/50 border-2 border-slate-700 p-3 rounded-xl transition flex flex-col gap-1 group shadow-md">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sky-300 font-black text-base md:text-lg group-hover:text-white transition">2. Zigzag curvo</span>
+                                <i class="fa-solid fa-wave-square text-slate-400 group-hover:text-sky-400 text-base"></i>
+                            </div>
+                            <span class="text-xs md:text-sm text-slate-300 font-semibold">Ondulaciones horizontales.</span>
+                        </button>
+
+                        <button onclick="selectLevel('triangulo')" id="lvlBtn-triangulo" class="mode-card bg-slate-800/90 hover:bg-sky-900/50 border-2 border-slate-700 p-3 rounded-xl transition flex flex-col gap-1 group shadow-md">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sky-300 font-black text-base md:text-lg group-hover:text-white transition">3. Triángulo</span>
+                                <i class="fa-solid fa-play -rotate-90 text-slate-400 group-hover:text-sky-400 text-base"></i>
+                            </div>
+                            <span class="text-xs md:text-sm text-slate-300 font-semibold">Vértices triangulares agudos.</span>
+                        </button>
+
+                        <button onclick="selectLevel('rectangulo')" id="lvlBtn-rectangulo" class="mode-card bg-slate-800/90 hover:bg-sky-900/50 border-2 border-slate-700 p-3 rounded-xl transition flex flex-col gap-1 group shadow-md">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sky-300 font-black text-base md:text-lg group-hover:text-white transition">4. Rectángulo</span>
+                                <i class="fa-solid fa-square text-slate-400 group-hover:text-sky-400 text-base"></i>
+                            </div>
+                            <span class="text-xs md:text-sm text-slate-300 font-semibold">Ángulos de 90° e hilada cuadrada.</span>
+                        </button>
+
+                        <button onclick="selectLevel('ocho')" id="lvlBtn-ocho" class="mode-card bg-slate-800/90 hover:bg-sky-900/50 border-2 border-slate-700 p-3 rounded-xl transition flex flex-col gap-1 group shadow-md">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sky-300 font-black text-base md:text-lg group-hover:text-white transition">5. Ocho</span>
+                                <i class="fa-solid fa-infinity text-slate-400 group-hover:text-sky-400 text-base"></i>
+                            </div>
+                            <span class="text-xs md:text-sm text-slate-300 font-semibold">Lazos cruzados continuos.</span>
+                        </button>
+
+                        <button onclick="selectLevel('circulos')" id="lvlBtn-circulos" class="mode-card bg-slate-800/90 hover:bg-sky-900/50 border-2 border-slate-700 p-3 rounded-xl transition flex flex-col gap-1 group shadow-md">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sky-300 font-black text-base md:text-lg group-hover:text-white transition">6. Círculos</span>
+                                <i class="fa-solid fa-circle-notch text-slate-400 group-hover:text-sky-400 text-base"></i>
+                            </div>
+                            <span class="text-xs md:text-sm text-slate-300 font-semibold">Espirales circulares superpuestas.</span>
+                        </button>
+                    </div>
+
+                    <!-- Start Action Button -->
+                    <button onclick="startGame()" class="wii-btn w-full py-4 rounded-xl font-black text-xl md:text-2xl text-white tracking-wider uppercase flex items-center justify-center gap-2 shadow-xl shrink-0">
+                        <i class="fa-solid fa-play text-2xl"></i> INICIAR NIVEL (01:30)
+                    </button>
+                </div>
+            </div>
+
+            <!-- OVERLAY: RESULTS SCORECARD -->
+            <div id="resultsOverlay" class="absolute inset-0 z-30 hidden flex-col items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto">
+                <div class="wii-card max-w-xl w-full p-6 md:p-8 rounded-2xl text-center relative my-auto">
+                    
+                    <div class="text-xs md:text-sm text-sky-400 font-black uppercase tracking-widest mb-1">REPORTE TÉCNICO DE SOLDADURA</div>
+                    <h2 class="text-2xl md:text-4xl font-black text-white mb-4">EVALUACIÓN DE PIEZA</h2>
+
+                    <!-- Final Grade Badge -->
+                    <div class="flex justify-center mb-4">
+                        <div class="w-28 h-28 rounded-full bg-slate-900 border-4 border-sky-400 flex flex-col items-center justify-center shadow-xl shadow-sky-500/20">
+                            <span class="text-xs text-slate-300 font-bold tracking-wider">CALIFICACIÓN</span>
+                            <span id="finalGrade" class="text-5xl font-black text-amber-400">A</span>
+                        </div>
+                    </div>
+
+                    <!-- Metric Breakdown List -->
+                    <div class="space-y-3 mb-4 mono-font text-base md:text-lg text-left bg-slate-900/80 p-4 rounded-xl border-2 border-slate-700 shadow-inner">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-bullseye text-sky-400 w-6"></i> Precisión de Guía:</span>
+                            <span id="resPrecision" class="text-white font-extrabold text-lg md:text-xl">96.5%</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-route text-emerald-400 w-6"></i> Cobertura del Cordón:</span>
+                            <span id="resCoverage" class="text-white font-extrabold text-lg md:text-xl">92.0%</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-stopwatch text-amber-400 w-6"></i> Tiempo Empleado:</span>
+                            <span id="resTime" class="text-white font-extrabold text-lg md:text-xl">14.2s</span>
+                        </div>
+                        <div class="flex justify-between items-center border-t-2 border-slate-700 pt-2.5 text-lg md:text-xl">
+                            <span class="text-sky-300 font-black">PUNTAJE TOTAL:</span>
+                            <span id="resTotalScore" class="text-amber-400 font-black text-2xl">9,450 PTS</span>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Technical Feedback -->
+                    <div id="resFeedback" class="bg-sky-950/60 border-2 border-sky-800/70 p-4 rounded-xl text-sm md:text-base font-semibold text-sky-200 text-left mb-5 leading-relaxed">
+                        "Excelente control del arco y velocidad constante. Cordón de soldadura uniforme y homogéneo."
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <button onclick="startGame()" class="wii-btn py-3.5 rounded-xl font-black text-white uppercase text-base md:text-lg tracking-wider shadow-lg">
+                            <i class="fa-solid fa-rotate-right mr-1.5"></i> REPETIR
+                        </button>
+                        <button onclick="returnToMenu()" class="bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 text-slate-100 py-3.5 rounded-xl font-black uppercase text-base md:text-lg tracking-wider transition shadow-lg">
+                            <i class="fa-solid fa-bars mr-1.5"></i> MENÚ
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- WII FOOTER NAV BAR -->
+    <footer class="w-full bg-slate-900/95 border-t-2 border-slate-800 px-4 py-2 flex justify-between items-center text-xs md:text-sm text-slate-300 font-semibold z-30 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-emerald-400 text-xs"></i> WII READY</span>
+            <span class="hidden md:inline text-slate-400">| SD CARD: /apps/WiiWeldSanjo/boot.dol</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <span>MODO: <strong id="footerModeText" class="text-sky-300 uppercase font-bold">1. MEDIA LUNA</strong></span>
+            <span class="text-slate-400 hidden sm:inline">• PRESIONAR 'HOME' PARA SALIR</span>
+        </div>
+    </footer>
+
+    <!-- GAME LOGIC ENGINE CODE -->
+    <script>
+        /**
+         * SOLDADURA SANJO SIMULATOR - GAME ENGINE
+         */
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const warningOverlay = document.getElementById('warningOverlay');
+        const timerWarningBanner = document.getElementById('timerWarningBanner');
+
+        // Level Definitions Mapping
+        const LEVEL_CONFIGS = {
+            'medialuna': { name: '1. Media luna', desc: 'Arcos cóncavos de avance continuo.' },
+            'zigzag_curvo': { name: '2. Zigzag curvo', desc: 'Ondulaciones suaves periódicas.' },
+            'triangulo': { name: '3. Triángulo', desc: 'Vértices triangulares de alta precisión.' },
+            'rectangulo': { name: '4. Rectángulo', desc: 'Pasos en ángulo recto estilo escalonado.' },
+            'ocho': { name: '5. Ocho', desc: 'Bucles cruzados en figura de ocho.' },
+            'circulos': { name: '6. Círculos', desc: 'Espirales circulares superpuestas.' }
+        };
+
+        // Game State Variables
+        let selectedLevelKey = 'medialuna';
+        let gameState = 'MENU';
+        
+        // Input Controls
+        let cursor = { x: 0, y: 0, insideCanvas: false };
+        let isWelding = false;
+
+        // Stats & Metrics
+        let score = 0;
+        let precisionAcc = [];
+        let heatLevel = 0;
+        let isOverheated = false;
+        
+        // Timer System (90 Seconds / 01:30 per level)
+        const LEVEL_TIME_LIMIT = 90; // seconds
+        let timeRemaining = LEVEL_TIME_LIMIT;
+        let lastTimerSecond = LEVEL_TIME_LIMIT;
+
+        // Particle System Arrays
+        let sparks = [];
+        let smokes = [];
+        let weldBeads = [];      // solo cordones "calientes" (< BEAD_COOL_TIME s)
+        let settledBeads = [];   // cordones ya fríos, formato compacto [x, y, r, x, y, r, ...]
+        const BEAD_COOL_TIME = 1.5;   // segundos hasta que el cordón queda gris
+        const BEAD_MIN_SPACING = 3;   // px mínimos entre cordones (evita apilar círculos en el mismo punto)
+        let lastBeadPos = null;
+        let beadCount = 0;       // cordones totales (se usa para la cobertura, igual que antes)
+
+        // Capa "horneada": los cordones fríos se dibujan UNA sola vez acá
+        const bakedCanvas = document.createElement('canvas');
+        const bakedCtx = bakedCanvas.getContext('2d');
+
+        function drawColdBead(c, x, y, r) {
+            c.beginPath();
+            c.arc(x, y, r, 0, Math.PI * 2);
+            c.fillStyle = '#94a3b8';
+            c.fill();
+            c.strokeStyle = 'rgba(15, 23, 42, 0.4)';
+            c.lineWidth = 1;
+            c.stroke();
+        }
+
+        function rebakeAll() {
+            bakedCtx.clearRect(0, 0, bakedCanvas.width, bakedCanvas.height);
+            for (let i = 0; i < settledBeads.length; i += 3) {
+                drawColdBead(bakedCtx, settledBeads[i], settledBeads[i + 1], settledBeads[i + 2]);
+            }
+        }
+
+        // Level Guide Path
+        let guidePath = [];
+
+        // Audio System
+        let audioCtx = null;
+        let soundEnabled = true;
+        let weldOscillator = null;
+        let weldNoiseNode = null;
+        let weldGainNode = null;
+        let warningBeepOsc = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playUIBeep(freq = 600, duration = 0.08) {
+            if (!soundEnabled) return;
+            initAudio();
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function playTimerBeep() {
+            if (!soundEnabled) return;
+            initAudio();
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(950, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch(e) {}
+        }
+
+        function startWeldingAudio() {
+            if (!soundEnabled || weldOscillator) return;
+            initAudio();
+            try {
+                weldOscillator = audioCtx.createOscillator();
+                weldOscillator.type = 'sawtooth';
+                weldOscillator.frequency.setValueAtTime(120, audioCtx.currentTime);
+
+                const bufferSize = audioCtx.sampleRate * 0.5;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                weldNoiseNode = audioCtx.createBufferSource();
+                weldNoiseNode.buffer = buffer;
+                weldNoiseNode.loop = true;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                filter.Q.setValueAtTime(1.5, audioCtx.currentTime);
+
+                weldGainNode = audioCtx.createGain();
+                weldGainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+
+                weldOscillator.connect(filter);
+                weldNoiseNode.connect(filter);
+                filter.connect(weldGainNode);
+                weldGainNode.connect(audioCtx.destination);
+
+                weldOscillator.start();
+                weldNoiseNode.start();
+            } catch(e) {}
+        }
+
+        function stopWeldingAudio() {
+            if (weldGainNode) {
+                try {
+                    weldGainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                    setTimeout(() => {
+                        if (weldOscillator) { weldOscillator.stop(); weldOscillator.disconnect(); }
+                        if (weldNoiseNode) { weldNoiseNode.stop(); weldNoiseNode.disconnect(); }
+                        weldOscillator = null;
+                        weldNoiseNode = null;
+                        weldGainNode = null;
+                    }, 60);
+                } catch(e) {
+                    weldOscillator = null;
+                    weldNoiseNode = null;
+                    weldGainNode = null;
+                }
+            }
+        }
+
+        function triggerDeviationWarningSound() {
+            if (!soundEnabled || warningBeepOsc) return;
+            initAudio();
+            try {
+                warningBeepOsc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                warningBeepOsc.type = 'square';
+                warningBeepOsc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                warningBeepOsc.connect(gain);
+                gain.connect(audioCtx.destination);
+                warningBeepOsc.start();
+                setTimeout(() => {
+                    if (warningBeepOsc) {
+                        warningBeepOsc.stop();
+                        warningBeepOsc = null;
+                    }
+                }, 100);
+            } catch(e) {}
+        }
+
+        document.getElementById('soundToggleBtn').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            const soundIcon = document.getElementById('soundIcon');
+            if (soundEnabled) {
+                soundIcon.className = "fa-solid fa-volume-high text-xl";
+                playUIBeep(800);
+            } else {
+                soundIcon.className = "fa-solid fa-volume-xmark text-xl text-red-400";
+                stopWeldingAudio();
+            }
+        });
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            bakedCanvas.width = rect.width;
+            bakedCanvas.height = rect.height;
+            rebakeAll();
+            if (gameState === 'PLAYING') {
+                generateGuidePath();
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function updateCursorPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            cursor.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            cursor.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            cursor.insideCanvas = true;
+        }
+
+        canvas.addEventListener('mousemove', updateCursorPos);
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                updateCursorPos(e);
+                setWeldingState(true);
+            }
+        });
+        window.addEventListener('mouseup', () => setWeldingState(false));
+
+        // (APK) preventDefault evita scroll/zoom y los clics "fantasma" que el navegador emula tras tocar
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length > 0) updateCursorPos(e.touches[0]);
+        }, { passive: false });
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                updateCursorPos(e.touches[0]);
+                setWeldingState(true);
+            }
+        }, { passive: false });
+        canvas.addEventListener('touchend', (e) => { e.preventDefault(); setWeldingState(false); }, { passive: false });
+        canvas.addEventListener('touchcancel', () => setWeldingState(false));
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameState === 'PLAYING') {
+                e.preventDefault();
+                setWeldingState(true);
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') setWeldingState(false);
+        });
+
+        function setWeldingState(active) {
+            if (gameState !== 'PLAYING') return;
+            if (isOverheated) {
+                isWelding = false;
+                stopWeldingAudio();
+                return;
+            }
+
+            if (active && !isWelding) {
+                isWelding = true;
+                lastBeadPos = null;
+                startWeldingAudio();
+            } else if (!active && isWelding) {
+                isWelding = false;
+                stopWeldingAudio();
+            }
+        }
+
+        // Level Select Handler
+        function selectLevel(lvlKey) {
+            selectedLevelKey = lvlKey;
+            playUIBeep(700);
+
+            document.getElementById('footerModeText').innerText = LEVEL_CONFIGS[lvlKey].name;
+
+            document.querySelectorAll('.mode-card').forEach(btn => {
+                btn.classList.remove('border-sky-400', 'bg-sky-900/50');
+                btn.classList.add('border-slate-700');
+            });
+            const activeBtn = document.getElementById(`lvlBtn-${lvlKey}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('border-slate-700');
+                activeBtn.classList.add('border-sky-400', 'bg-sky-900/50');
+            }
+        }
+
+        // Generate Path Points for the 6 Patterns
+        function generateGuidePath() {
+            guidePath = [];
+            const w = canvas.width;
+            const h = canvas.height;
+            const margin = w * 0.12;
+            const startX = margin;
+            const endX = w - margin;
+            const centerY = h * 0.5;
+            const amplitude = h * 0.16;
+
+            if (selectedLevelKey === 'medialuna') {
+                const repeat = 12;
+                const stepX = (endX - startX) / repeat;
+                for (let i = 0; i < repeat; i++) {
+                    const x0 = startX + i * stepX;
+                    const x1 = startX + (i + 1) * stepX;
+                    const subSteps = 12;
+                    for (let j = 0; j <= subSteps; j++) {
+                        const t = j / subSteps;
+                        const x = x0 + (x1 - x0) * t;
+                        const y = centerY + Math.sin(t * Math.PI) * amplitude;
+                        guidePath.push({ x, y, tolerance: 22 });
+                    }
+                }
+            } else if (selectedLevelKey === 'zigzag_curvo') {
+                const steps = 150;
+                const frequency = 7;
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const x = startX + (endX - startX) * t;
+                    const y = centerY + Math.sin(t * Math.PI * 2 * frequency) * amplitude;
+                    guidePath.push({ x, y, tolerance: 22 });
+                }
+            } else if (selectedLevelKey === 'triangulo') {
+                const repeat = 9;
+                const stepX = (endX - startX) / repeat;
+                for (let i = 0; i < repeat; i++) {
+                    const x0 = startX + i * stepX;
+                    const xMid = x0 + stepX * 0.5;
+                    const x1 = x0 + stepX;
+
+                    for (let j = 0; j <= 6; j++) {
+                        const t = j / 6;
+                        guidePath.push({ x: x0 + (xMid - x0) * t, y: centerY - amplitude * t, tolerance: 20 });
+                    }
+                    for (let j = 0; j <= 6; j++) {
+                        const t = j / 6;
+                        guidePath.push({ x: xMid + (x1 - xMid) * t, y: (centerY - amplitude) + amplitude * t, tolerance: 20 });
+                    }
+                }
+            } else if (selectedLevelKey === 'rectangulo') {
+                const repeat = 7;
+                const stepX = (endX - startX) / repeat;
+                for (let i = 0; i < repeat; i++) {
+                    const x0 = startX + i * stepX;
+                    const x1 = x0 + stepX * 0.5;
+                    const x2 = x0 + stepX;
+
+                    for (let j = 0; j <= 4; j++) guidePath.push({ x: x0, y: centerY - (amplitude * j / 4), tolerance: 20 });
+                    for (let j = 0; j <= 4; j++) guidePath.push({ x: x0 + (x1 - x0) * (j / 4), y: centerY - amplitude, tolerance: 20 });
+                    for (let j = 0; j <= 4; j++) guidePath.push({ x: x1, y: (centerY - amplitude) + (amplitude * j / 4), tolerance: 20 });
+                    for (let j = 0; j <= 4; j++) guidePath.push({ x: x1 + (x2 - x1) * (j / 4), y: centerY, tolerance: 20 });
+                }
+            } else if (selectedLevelKey === 'ocho') {
+                const steps = 180;
+                const freq = 6;
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const x = startX + (endX - startX) * t;
+                    const angle = t * Math.PI * 2 * freq;
+                    const y = centerY + Math.sin(angle * 2) * (amplitude * 0.85);
+                    guidePath.push({ x, y, tolerance: 22 });
+                }
+            } else if (selectedLevelKey === 'circulos') {
+                const loops = 8;
+                const stepX = (endX - startX) / loops;
+                const radius = amplitude * 0.8;
+                for (let i = 0; i < loops; i++) {
+                    const centerX = startX + i * stepX + radius;
+                    const subSteps = 16;
+                    for (let j = 0; j <= subSteps; j++) {
+                        const angle = (j / subSteps) * Math.PI * 2;
+                        const x = centerX + Math.cos(angle) * radius;
+                        const y = centerY + Math.sin(angle) * radius;
+                        guidePath.push({ x, y, tolerance: 22 });
+                    }
+                }
+            }
+        }
+
+        // Start Gameplay Logic
+        function startGame() {
+            initAudio();
+            playUIBeep(900);
+
+            gameState = 'PLAYING';
+            score = 0;
+            precisionAcc = [];
+            heatLevel = 0;
+            isOverheated = false;
+            
+            // Time Initialization (90s / 01:30)
+            timeRemaining = LEVEL_TIME_LIMIT;
+            lastTimerSecond = LEVEL_TIME_LIMIT;
+
+            sparks = [];
+            smokes = [];
+            weldBeads = [];
+            settledBeads = [];
+            lastBeadPos = null;
+            beadCount = 0;
+            bakedCtx.clearRect(0, 0, bakedCanvas.width, bakedCanvas.height);
+
+            document.getElementById('menuOverlay').classList.add('hidden');
+            document.getElementById('resultsOverlay').classList.add('hidden');
+            document.getElementById('resultsOverlay').classList.remove('flex');
+            document.getElementById('hudStats').classList.remove('hidden');
+            timerWarningBanner.classList.add('hidden');
+
+            resizeCanvas();
+        }
+
+        function returnToMenu() {
+            gameState = 'MENU';
+            stopWeldingAudio();
+            document.getElementById('resultsOverlay').classList.add('hidden');
+            document.getElementById('resultsOverlay').classList.remove('flex');
+            document.getElementById('menuOverlay').classList.remove('hidden');
+            document.getElementById('hudStats').classList.add('hidden');
+            timerWarningBanner.classList.add('hidden');
+        }
+
+        // Explicitly attach to window object to prevent ReferenceError in inline HTML event handlers
+        window.startGame = startGame;
+        window.returnToMenu = returnToMenu;
+        window.selectLevel = selectLevel;
+
+        function addSparks(x, y, count = 10) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 8;
+                sparks.push({
+                    x: x, y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - (Math.random() * 2),
+                    life: 1.0, decay: 0.03 + Math.random() * 0.05,
+                    size: 1.5 + Math.random() * 2.5,
+                    color: Math.random() > 0.3 ? '#38bdf8' : '#f59e0b'
+                });
+            }
+        }
+
+        function addSmoke(x, y) {
+            if (Math.random() > 0.4) return;
+            smokes.push({
+                x: x + (Math.random() - 0.5) * 10, y: y - 5,
+                vx: (Math.random() - 0.5) * 0.8, vy: -1 - Math.random() * 1.5,
+                radius: 4 + Math.random() * 6, life: 0.8, decay: 0.015
+            });
+        }
+
+        function getClosestGuideInfo(px, py) {
+            if (guidePath.length < 2) return { distance: 999, progressIndex: 0 };
+
+            let minDistance = 9999;
+            let closestIndex = 0;
+
+            for (let i = 0; i < guidePath.length; i++) {
+                const pt = guidePath[i];
+                const dx = px - pt.x;
+                const dy = py - pt.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestIndex = i;
+                }
+            }
+
+            return { distance: minDistance, closestPoint: guidePath[closestIndex], index: closestIndex };
+        }
+
+        // Update Frame Game Loop
+        function update(dt) {
+            if (gameState !== 'PLAYING') return;
+
+            // 1. Countdown Timer (90s limit)
+            timeRemaining = Math.max(0, timeRemaining - dt);
+            const currentSec = Math.ceil(timeRemaining);
+
+            // Format Timer HUD (MM:SS)
+            const minutes = Math.floor(currentSec / 60);
+            const seconds = currentSec % 60;
+            const minStr = String(minutes).padStart(2, '0');
+            const secStr = String(seconds).padStart(2, '0');
+            const timerElem = document.getElementById('hudTimer');
+            const timerContainer = document.getElementById('hudTimerContainer');
+            timerElem.innerText = `${minStr}:${secStr}`;
+
+            // 10-Second Warning System
+            if (timeRemaining <= 10.0) {
+                timerContainer.classList.add('border-red-500', 'bg-red-950/80');
+                timerElem.classList.remove('text-sky-300');
+                timerElem.classList.add('text-red-400', 'animate-pulse');
+                timerWarningBanner.classList.remove('hidden');
+
+                if (currentSec !== lastTimerSecond) {
+                    playTimerBeep();
+                    lastTimerSecond = currentSec;
+                }
+            } else {
+                timerContainer.classList.remove('border-red-500', 'bg-red-950/80');
+                timerElem.classList.add('text-sky-300');
+                timerElem.classList.remove('text-red-400', 'animate-pulse');
+                timerWarningBanner.classList.add('hidden');
+            }
+
+            // Time Expired Event
+            if (timeRemaining <= 0) {
+                finishGame();
+                return;
+            }
+
+            // 2. Heat Management (Slower buildup)
+            if (isWelding) {
+                heatLevel += 15 * dt;
+                if (heatLevel >= 100) {
+                    heatLevel = 100;
+                    isOverheated = true;
+                    setWeldingState(false);
+                    triggerDeviationWarningSound();
+                }
+            } else {
+                heatLevel -= 35 * dt;
+                if (heatLevel <= 0) {
+                    heatLevel = 0;
+                    isOverheated = false;
+                }
+            }
+            document.getElementById('heatBar').style.width = `${heatLevel}%`;
+
+            // 3. Active Welding Logic
+            if (isWelding && cursor.insideCanvas) {
+                addSparks(cursor.x, cursor.y, 8);
+                addSmoke(cursor.x, cursor.y);
+
+                beadCount++;  // 1 por cuadro soldando, como cuando todos se guardaban en weldBeads
+                const bdx = lastBeadPos ? cursor.x - lastBeadPos.x : 999;
+                const bdy = lastBeadPos ? cursor.y - lastBeadPos.y : 999;
+                if (bdx * bdx + bdy * bdy >= BEAD_MIN_SPACING * BEAD_MIN_SPACING) {
+                    weldBeads.push({
+                        x: cursor.x, y: cursor.y,
+                        radius: 8 + Math.random() * 3,
+                        timeCreated: performance.now()
+                    });
+                    lastBeadPos = { x: cursor.x, y: cursor.y };
+                }
+
+                const info = getClosestGuideInfo(cursor.x, cursor.y);
+                const tolerance = info.closestPoint ? info.closestPoint.tolerance : 22;
+
+                if (info.distance <= tolerance) {
+                    const precisionFactor = Math.max(0, 1 - (info.distance / tolerance));
+                    precisionAcc.push(precisionFactor);
+                    score += Math.round(10 * precisionFactor);
+                    warningOverlay.style.opacity = '0';
+                } else {
+                    precisionAcc.push(0.0);
+                    score = Math.max(0, score - 5);
+                    warningOverlay.style.opacity = '0.5';
+                    triggerDeviationWarningSound();
+                }
+
+                // Check finish path completion
+                if (info.index >= guidePath.length - 2 && isWelding) {
+                    finishGame();
+                    return;
+                }
+            } else {
+                warningOverlay.style.opacity = '0';
+            }
+
+            // Update Particle Physics
+            for (let i = sparks.length - 1; i >= 0; i--) {
+                const s = sparks[i];
+                s.x += s.vx; s.y += s.vy; s.vy += 0.2; s.life -= s.decay;
+                if (s.life <= 0) sparks.splice(i, 1);
+            }
+
+            for (let i = smokes.length - 1; i >= 0; i--) {
+                const sm = smokes[i];
+                sm.x += sm.vx; sm.y += sm.vy; sm.radius += 0.2; sm.life -= sm.decay;
+                if (sm.life <= 0) smokes.splice(i, 1);
+            }
+
+            // HUD Stats
+            const avgPrec = precisionAcc.length > 0 
+                ? (precisionAcc.reduce((a, b) => a + b, 0) / precisionAcc.length * 100).toFixed(1)
+                : '100.0';
+            document.getElementById('hudPrecision').innerText = `${avgPrec}%`;
+            document.getElementById('hudScore').innerText = String(score).padStart(5, '0');
+        }
+
+        // Finish Game & Apply Grading Scale System
+        function finishGame() {
+            setWeldingState(false);
+            gameState = 'RESULTS';
+            playUIBeep(1000, 0.2);
+
+            const avgPrecision = precisionAcc.length > 0 
+                ? (precisionAcc.reduce((a, b) => a + b, 0) / precisionAcc.length) * 100 
+                : 0;
+
+            const coverage = Math.min(100, (beadCount / guidePath.length) * 120);
+            const finalPercentage = Math.min(100, (avgPrecision * 0.6) + (coverage * 0.4));
+            
+            // Revised Grading Scale & Technical Feedback
+            let grade = 'D';
+            let gradeColor = 'text-red-500';
+            let feedback = '';
+
+            if (finalPercentage >= 96.0) {
+                grade = 'A';
+                gradeColor = 'text-emerald-400';
+                feedback = '¡Excelente nivel de maestría técnica! Mantuviste una distancia de arco constante, velocidad uniforme y una penetración homogénea en todo el trazado. Para sostener este nivel en soldadura real, asegúrate de mantener el ángulo de trabajo a 45° y controlar adecuadamente la velocidad de enfriamiento del baño de fusión.';
+            } else if (finalPercentage >= 86.0) {
+                grade = 'B';
+                gradeColor = 'text-sky-400';
+                feedback = 'Buen desempeño técnico, aunque con pequeños detalles a corregir. Se observaron leves variaciones en el pulso y la alineación del cordón. Recomendación pedagógica: afianza el apoyo de la mano guía, mantén un ritmo de avance constante para evitar socavaciones o exceso de aporte y estabiliza el puntero en las curvas.';
+            } else if (finalPercentage >= 51.0) {
+                grade = 'C';
+                gradeColor = 'text-amber-400';
+                feedback = 'Calificación regular. Existen oscilaciones marcadas fuera del eje guía y discontinuidad en el cordón. Consejo técnico: practica la postura de trabajo para mejorar el control motriz. Recuerda que desviarse de la línea causa falta de fusión y porosidad en las juntas reales. Modera la velocidad de avance.';
+            } else {
+                grade = 'D';
+                gradeColor = 'text-red-500';
+                feedback = 'Calificación insuficiente (50% o menos). El cordón presenta desviaciones severas y falta de continuidad crítica. Diagnóstico técnico: falta de control del arco y movimiento errático. Recomendación: revisa la empuñadura del control, estabiliza los hombros, reduce la aceleración voluntaria y repite el ejercicio guiando la vista 1 cm por delante del punto de fusión.';
+            }
+
+            const timeUsed = (LEVEL_TIME_LIMIT - timeRemaining).toFixed(1);
+            const finalScoreTotal = Math.round(score + (finalPercentage * 50));
+
+            // Populate Scorecard
+            const gradeElem = document.getElementById('finalGrade');
+            gradeElem.innerText = grade;
+            gradeElem.className = `text-5xl font-black ${gradeColor}`;
+
+            document.getElementById('resPrecision').innerText = `${avgPrecision.toFixed(1)}%`;
+            document.getElementById('resCoverage').innerText = `${coverage.toFixed(1)}% (${finalPercentage.toFixed(1)}% final)`;
+            document.getElementById('resTime').innerText = `${timeUsed}s / 90s`;
+            document.getElementById('resTotalScore').innerText = `${finalScoreTotal.toLocaleString()} PTS`;
+            document.getElementById('resFeedback').innerText = `"${feedback}"`;
+
+            document.getElementById('hudStats').classList.add('hidden');
+            timerWarningBanner.classList.add('hidden');
+            document.getElementById('resultsOverlay').classList.remove('hidden');
+            document.getElementById('resultsOverlay').classList.add('flex');
+        }
+
+        // Render Canvas Visuals
+        function render() {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // 1. Metal Sheet Background
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let x = 0; x < w; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+            }
+            for (let y = 0; y < h; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+            }
+
+            // 2. Draw Technical Guide Pattern
+            if (gameState === 'PLAYING' && guidePath.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(guidePath[0].x, guidePath[0].y);
+                for (let i = 1; i < guidePath.length; i++) {
+                    ctx.lineTo(guidePath[i].x, guidePath[i].y);
+                }
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+                ctx.lineWidth = 22;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(guidePath[0].x, guidePath[0].y);
+                for (let i = 1; i < guidePath.length; i++) {
+                    ctx.lineTo(guidePath[i].x, guidePath[i].y);
+                }
+                ctx.strokeStyle = '#0284c7';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 6]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 3. Cooling Weld Beads
+            // Los cordones fríos se "hornean" una sola vez en bakedCanvas (mismo aspecto gris
+            // con borde oscuro, así el recorrido soldado sigue visible). Por cuadro solo se
+            // dibujan los calientes (~90 como máximo) + 1 drawImage de la capa horneada.
+            const now = performance.now();
+            while (weldBeads.length > 0 && (now - weldBeads[0].timeCreated) / 1000 >= BEAD_COOL_TIME) {
+                const b = weldBeads.shift();
+                drawColdBead(bakedCtx, b.x, b.y, b.radius);
+                settledBeads.push(b.x, b.y, b.radius);
+            }
+            ctx.drawImage(bakedCanvas, 0, 0);
+
+            weldBeads.forEach(bead => {
+                const age = (now - bead.timeCreated) / 1000;
+                ctx.beginPath();
+                ctx.arc(bead.x, bead.y, bead.radius, 0, Math.PI * 2);
+
+                if (age < 0.4) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#f97316';
+                    ctx.shadowBlur = 12;
+                } else {
+                    ctx.fillStyle = '#f97316';
+                    ctx.shadowColor = '#ef4444';
+                    ctx.shadowBlur = 6;
+                }
+
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            // 4. Particles (Smoke & Sparks)
+            smokes.forEach(sm => {
+                ctx.beginPath();
+                ctx.arc(sm.x, sm.y, sm.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(148, 163, 184, ${sm.life * 0.25})`;
+                ctx.fill();
+            });
+
+            sparks.forEach(s => {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fillStyle = s.color;
+                ctx.shadowColor = s.color;
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // 5. Electric Arc Flash Glow
+            if (isWelding && cursor.insideCanvas) {
+                const glowGradient = ctx.createRadialGradient(cursor.x, cursor.y, 2, cursor.x, cursor.y, 45);
+                glowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+                glowGradient.addColorStop(0.2, 'rgba(56, 189, 248, 0.8)');
+                glowGradient.addColorStop(0.6, 'rgba(14, 165, 233, 0.2)');
+                glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.fillStyle = glowGradient;
+                ctx.beginPath();
+                ctx.arc(cursor.x, cursor.y, 45, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 6. Wiimote Pointer Cursor (Welding Torch & Glove)
+            if (cursor.insideCanvas) {
+                ctx.save();
+                
+                // Offset torch position so the tip hits cursor.x, cursor.y exactly
+                const tipX = cursor.x;
+                const tipY = cursor.y;
+
+                // 6a. Arc Point Precision Crosshair
+                ctx.strokeStyle = isWelding ? '#fbbf24' : '#38bdf8';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(tipX, tipY, 4, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 6b. Torch Body Drawing (First Person Angle)
+                ctx.save();
+                ctx.translate(tipX, tipY);
+                
+                const torchAngle = Math.PI / 6; // 30 degrees tilt
+                ctx.rotate(torchAngle);
+
+                // Ceramic Nozzle Tip
+                ctx.fillStyle = '#f8fafc';
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(16, 6);
+                ctx.lineTo(24, 14);
+                ctx.lineTo(6, 18);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Metallic Neck
+                ctx.fillStyle = '#94a3b8';
+                ctx.beginPath();
+                ctx.moveTo(18, 10);
+                ctx.quadraticCurveTo(60, 30, 90, 70);
+                ctx.lineTo(105, 80);
+                ctx.quadraticCurveTo(65, 45, 12, 16);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Torch Handle (Orange)
+                ctx.fillStyle = '#ea580c';
+                ctx.beginPath();
+                ctx.moveTo(90, 70);
+                ctx.lineTo(150, 125);
+                ctx.lineTo(185, 155);
+                ctx.lineTo(165, 175);
+                ctx.lineTo(125, 145);
+                ctx.lineTo(75, 88);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Rubber Grip
+                ctx.fillStyle = '#0f172a';
+                ctx.beginPath();
+                ctx.moveTo(110, 88);
+                ctx.lineTo(135, 110);
+                ctx.lineTo(145, 102);
+                ctx.lineTo(120, 80);
+                ctx.closePath();
+                ctx.fill();
+
+                // Welder Protective Glove
+                ctx.fillStyle = '#334155';
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(135, 135);
+                ctx.lineTo(240, 220);
+                ctx.lineTo(290, 170);
+                ctx.lineTo(170, 105);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Glove Stitching Highlight
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(150, 145);
+                ctx.lineTo(180, 120);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.restore();
+                ctx.restore();
+            }
+        }
+
+        let lastTimestamp = performance.now();
+        function gameLoop(timestamp) {
+            const dt = (timestamp - lastTimestamp) / 1000;
+            lastTimestamp = timestamp;
+
+            update(Math.min(dt, 0.1));
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = () => {
+            resizeCanvas();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
